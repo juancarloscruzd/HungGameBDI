@@ -35,82 +35,67 @@ public class Player1BDI {
 	static Logger logger = Logger.getLogger(Player1BDI.class.getName());
 
 	@AgentFeature
-	protected IBDIAgentFeature bdiAgentFeature;
-
-	@AgentFeature
 	protected IMessageFeature messageFeature;
 
+	@AgentFeature
+	protected IBDIAgentFeature bdiAgentFeature;
+
 	@AgentArgument
-	protected IComponentIdentifier guesser;
+	protected IComponentIdentifier player2;
 
 	@Belief
-	private Set<String> words; // PalabrasEspañol
+	private Set<String> spanishWords;
 
 	@Belief
-	protected String wordToGuess; // Creencia PalabraSecreta
+	protected String secretWord;
 
 	@Belief
-	protected String[] guessedLetters; // Creencia PalabraAdivinada
+	protected String[] guessedLetters;
 
 	@Belief
-	protected Integer hangmanState; // Creencia ParteAhorcadoActual
-	
-	
+	protected Integer gameCurrentState;
+
 	@AgentCreated
 	public void init() {
-		System.out.println("[Hangman] player created");
-		words = getSpanishWords();
-		wordToGuess = pickRandomWord(words);
-		System.out.println("[Hangman] word to guess: " + wordToGuess);
+		gameCurrentState = 0;
+		logger.info("Player1 created successfuly...");
 
-		guessedLetters = new String[wordToGuess.length()];
-		hangmanState = 0;
+		spanishWords = loadWords();
+		secretWord = pickWord(spanishWords);
+
+		logger.info("Selected word: " + secretWord);
+		
+		FrameView.selectedWordLabel.setText("Selected word: " + secretWord);
+
+		guessedLetters = new String[secretWord.length()];
 	}
 
 	@AgentBody
 	public void body() {
-		System.out.println("[Hangman] the game started");
-		printHangmanState();
-		sendGuessedLetters();
+		logCurrentGameState();
+		emitPartialResult();
 	}
 
 	@AgentMessageArrived
 	public void messageArrived(Map<String, Object> msg, MessageType mt) {
 		String letter = ((String) msg.get(SFipa.CONTENT)).toLowerCase();
 
-		Boolean letterIsCorrect = updateGuessedLetter(letter);
+		Boolean letterIsCorrect = checkAttempt(letter);
 
 		if (!letterIsCorrect) {
-			hangmanState++;
+			gameCurrentState++;
 		}
 
-		printHangmanState();
+		logCurrentGameState();
 
-		sendLetterStatus(letterIsCorrect);
-		sendGuessedLetters();
+		emitGameStatus(letterIsCorrect);
+		emitPartialResult();
 	}
 
-	private void sendLetterStatus(Boolean letterIsCorrect) {
-		Map<String, Object> msg = new HashMap<String, Object>();
-		msg.put(SFipa.CONTENT, letterIsCorrect);
-		msg.put(SFipa.RECEIVERS, guesser);
-
-		messageFeature.sendMessage(msg, SFipa.FIPA_MESSAGE_TYPE).get();
-	}
-
-	private void printHangmanState() {
-		String guessedWord = String.join(" ",
-				Arrays.stream(guessedLetters).map(o -> o == null ? "_" : o).collect(Collectors.toList()));
-
-		System.out.println("[Hangman] word: " + guessedWord);
-		System.out.println(hangmanStates[hangmanState]);
-		FrameView.myLabel.setIcon(new ImageIcon(String.format("resources/images/%s.gif", hangmanState + 1) ));
-	}
-
-	private Boolean updateGuessedLetter(String letter) {
+	private Boolean checkAttempt(String letter) {
 		Boolean guessed = false;
-		for (int i = 0; i < wordToGuess.length(); i++) {
-			if (wordToGuess.charAt(i) == letter.charAt(0)) {
+		for (int i = 0; i < secretWord.length(); i++) {
+			if (secretWord.charAt(i) == letter.charAt(0)) {
 				guessedLetters[i] = letter;
 				guessed = true;
 			}
@@ -119,27 +104,31 @@ public class Player1BDI {
 		return guessed;
 	}
 
-	private void sendGuessedLetters() {
+	private void emitPartialResult() {
 		Map<String, Object> msg = new HashMap<String, Object>();
 		msg.put(SFipa.CONTENT, guessedLetters);
-		msg.put(SFipa.RECEIVERS, guesser);
+		msg.put(SFipa.RECEIVERS, player2);
+
+		messageFeature.sendMessage(msg, SFipa.FIPA_MESSAGE_TYPE).get();
+	}
+	
+	private void emitGameStatus(Boolean result) {
+		Map<String, Object> msg = new HashMap<String, Object>();
+		msg.put(SFipa.CONTENT, result);
+		msg.put(SFipa.RECEIVERS, player2);
 
 		messageFeature.sendMessage(msg, SFipa.FIPA_MESSAGE_TYPE).get();
 	}
 
-	private String pickRandomWord(Set<String> setOfWords) {
-		// get a random number between 0 and the set size;
-		Integer randomIndex = new Random().nextInt(setOfWords.size());
 
-		// get the word at that index.
-		return (String) setOfWords.toArray()[randomIndex];
+	private String pickWord(Set<String> words) {
+		Integer randomIndex = new Random().nextInt(words.size());
+		return (String) words.toArray()[randomIndex];
 	}
 
-	private Set<String> getSpanishWords() {
-		// Read words.txt file
+	private Set<String> loadWords() {
 		InputStream inputStream = getClass().getResourceAsStream("/corpus");
 		try (Scanner wordsFile = new Scanner(inputStream)) {
-			// Put each line of the file into a set.
 			Set<String> setOfWords = new HashSet<>();
 			while (wordsFile.hasNext()) {
 				setOfWords.add(wordsFile.nextLine().trim().toLowerCase());
@@ -148,12 +137,13 @@ public class Player1BDI {
 		}
 	}
 
-	private final String[] hangmanStates = new String[] {
-			"\n       __________\n       |        |\n       |\n       |\n       |\n       |\n       |\n    ========\n",
-			"\n       __________\n       |        |\n       |        O\n       |\n       |\n       |\n       |\n    ========\n",
-			"\n       __________\n       |        |\n       |        O\n       |        |\n       |        |\n       |\n       |\n    ========\n",
-			"\n       __________\n       |        |\n       |        O\n       |        |\n       |        |\n       |       /\n       |\n    ========\n",
-			"\n       __________\n       |        |\n       |        O\n       |        |\n       |        |\n       |       / \\\n       |\n    ========\n",
-			"\n       __________\n       |        |\n       |        O\n       |      --|\n       |        |\n       |       / \\\n       |\n    ========\n",
-			"\n       __________\n       |        |\n       |        O\n       |      --|--\n       |        |\n       |       / \\\n       |\n    ========\n" };
+	private void logCurrentGameState() {
+		String guessedWord = String.join(" ",
+				Arrays.stream(guessedLetters).map(o -> o == null ? "_" : o).collect(Collectors.toList()));
+
+		logger.info("Progress: " + guessedWord);
+		FrameView.gameStateLabel.setIcon(new ImageIcon(String.format("resources/images/%s.gif", gameCurrentState + 1)));
+		FrameView.progressLabel.setText("Progress: " + guessedWord);
+	}
+
 }

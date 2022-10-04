@@ -2,6 +2,7 @@ package pe.edu.utec.hung.bdi;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -25,126 +26,142 @@ import jadex.micro.annotation.AgentCreated;
 import jadex.micro.annotation.AgentFeature;
 import jadex.micro.annotation.AgentMessageArrived;
 import jadex.micro.annotation.Description;
+import pe.edu.utec.hung.ui.FrameView;
 import pe.edu.utec.hung.util.Alphabet;
 
 @Agent
 @Description("Guesser player")
 public class Player2BDI {
-	
+
 	static Logger logger = Logger.getLogger(Player2BDI.class.getName());
+
+	@AgentFeature
+	protected IBDIAgentFeature bdiAgentFeature;
+
+	@Agent
+	protected IInternalAccess internalAccess;
+
+	@AgentFeature
+	protected IMessageFeature messageFeature;
+
+	@AgentFeature
+	protected IExecutionFeature executionFeature;
+
+	@Belief
+	protected List<String> usedLetters;
+
+	@Belief
+	protected Boolean gameEnd;
+
+	@Belief
+	protected Integer failedAttempts;
+
+	@Belief
+	protected Integer maxAttempts;
+
+	LinkedList<String> listOfLetterWithHighProbability = Alphabet.asLinkedList();
 	
-    @AgentFeature
-    protected IBDIAgentFeature bdiAgentFeature;
+	private Random random = new Random();
 
-    @Agent
-    protected IInternalAccess internalAccess;
+	@AgentCreated
+	public void init() {
+		System.out.println("[Guesser] player created");
 
-    @AgentFeature
-    protected IMessageFeature messageFeature;
+		usedLetters = new ArrayList<>();
 
-    @AgentFeature
-    protected IExecutionFeature executionFeature;
+		gameEnd = false;
 
-    @Belief
-    protected List<String> usedLetters; // Creencia LetrasUtilizadas
+		failedAttempts = 0;
 
-    @Belief
-    protected Boolean gameOver; // Creencia FinJuego
+		maxAttempts = 6;
+	}
 
-    @Belief
-    protected Integer failedAttempts;
+	@Goal()
+	public class GuessWord {
+		@GoalRecurCondition(beliefs = "gameEnd")
+		protected boolean maintain() {
+			return !gameEnd;
+		}
 
-    @Belief
-    protected Integer maxAttempts;
+		@GoalTargetCondition(beliefs = "gameEnd")
+		protected boolean target() {
+			return gameEnd;
+		}
+	}
 
-    @AgentCreated
-    public void init() {
-        System.out.println("[Guesser] player created");
+	@Plan(trigger = @Trigger(goals = GuessWord.class))
+	protected void thinkAndSelectAnotherLetter() {
+		String nextLetter = pickNextLetter();
 
-        usedLetters = new ArrayList<>();
+		usedLetters.add(nextLetter);
+	}
 
-        gameOver = false;
+	@Plan(trigger = @Trigger(factaddeds = "usedLetters"))
+	protected void sendSelectedLetter() {
+		String nextLetter = usedLetters.get(usedLetters.size() - 1);
+		logger.info("Selected letter: " + nextLetter);
+		FrameView.attemptLabel.setText("Player 1 attempt: " + nextLetter);
 
-        failedAttempts = 0;
+		reply.put(SFipa.CONTENT, nextLetter);
+		reply.put(SFipa.SENDER, internalAccess.getComponentIdentifier());
 
-        maxAttempts = 6;
-    }
+		executionFeature.waitForDelay(1000L).get();
+		messageFeature.sendMessage(reply, SFipa.FIPA_MESSAGE_TYPE).get();
+	}
 
-    @Goal()
-    public class GuessWord {
-        @GoalRecurCondition(beliefs = "gameOver")
-        protected boolean maintain() {
-            return !gameOver;
-        }
-        @GoalTargetCondition(beliefs = "gameOver")
-        protected boolean target() {
-            return gameOver;
-        }
-    }
+	@AgentBody
+	public void body() {
+	}
 
-    @Plan(trigger = @Trigger(goals = GuessWord.class))
-    protected void thinkAndSelectAnotherLetter (){
-        String nextLetter = getNextRandomLetter();
+	private Map<String, Object> reply;
 
-        usedLetters.add(nextLetter);
-    }
+	@AgentMessageArrived
+	public void messageArrived(Map<String, Object> msg, final MessageType mt) {
+		if (gameEnd) {
+			logger.info(failedAttempts < maxAttempts ? "Player2 won the game" : "Player 1 won the game");
+		} else {
+			if (msg.get(SFipa.CONTENT) instanceof Boolean) {
+				if ((Boolean) msg.get(SFipa.CONTENT) == false) {
+					failedAttempts++;
+				}
 
-    @Plan(trigger = @Trigger(factaddeds = "usedLetters"))
-    protected void sendSelectedLetter() {
-        String nextLetter = usedLetters.get(usedLetters.size() - 1);
-        System.out.println("[Guesser] selected letter: " + nextLetter);
+				gameEnd = failedAttempts == maxAttempts;
+				
+			} else {
+				String[] guessedLetters = (String[]) msg.get(SFipa.CONTENT);
 
-        reply.put(SFipa.CONTENT, nextLetter);
-        reply.put(SFipa.SENDER, internalAccess.getComponentIdentifier());
+				Boolean continueGame = Arrays.stream(guessedLetters).anyMatch(o -> o == null);
 
-        executionFeature.waitForDelay(1000L).get();
-        messageFeature.sendMessage(reply, SFipa.FIPA_MESSAGE_TYPE).get();
-    }
+				gameEnd = !continueGame;
 
-    @AgentBody
-    public void body() {
-        // ...
-    }
+				reply = mt.createReply(msg);
 
-    private Map<String, Object> reply;
+				bdiAgentFeature.dispatchTopLevelGoal(new GuessWord()).get();
+			}
+		}
+	}
 
-    @AgentMessageArrived
-    public void messageArrived(Map<String, Object> msg, final MessageType mt)
-    {
-        if (gameOver) {
-            System.out.println(failedAttempts < maxAttempts ? "Guesser wins" : "Hangman wins");
-        } else {
-            if (msg.get(SFipa.CONTENT) instanceof Boolean) {
-                if ((Boolean) msg.get(SFipa.CONTENT) == false) {
-                    failedAttempts++;
-                }
+	private String pickNextLetter() {
+		String selectedLetter = "_";
+		do {
+			String next = "";
+			// Getting true the 85% of times, to prefer the letters with more probability
+			// This allows to pull the least probable letters from time to time to reduce the chance to loss a turn
+			Boolean radomBoolean = getRandomBoolean(0.85f);
+			if (radomBoolean) 
+				next = listOfLetterWithHighProbability.poll();
+			else
+				next = listOfLetterWithHighProbability.pollLast();
+			if (!usedLetters.contains(next)) {
+				selectedLetter = next;
+			}
+		} while (selectedLetter == "_");
 
-                gameOver = failedAttempts == maxAttempts;
-            } else {
-                String[] guessedLetters = (String[]) msg.get(SFipa.CONTENT);
-
-                Boolean hasMissingLetters = Arrays.stream(guessedLetters).anyMatch(o -> o == null);
-
-                gameOver = !hasMissingLetters;
-
-                // Set the reply object
-                reply = mt.createReply(msg);
-
-                // Start the Goal GuessWord
-                bdiAgentFeature.dispatchTopLevelGoal(new GuessWord()).get();
-            }
-        }
-    }
-
-    private String getNextRandomLetter() {
-        String nextLetter = "_";
-        do {
-            String randomLetter = Alphabet.asArray[new Random().nextInt(Alphabet.asArray.length)];
-            if (!usedLetters.contains(randomLetter)){
-                nextLetter = randomLetter;
-            }
-        }while(nextLetter == "_");
-
-        return nextLetter;
-    }
+		return selectedLetter;
+	}
+	
+	// Gets true or false with bias
+	private boolean getRandomBoolean(float p){
+	    return random.nextFloat() < p;
+	}
 }

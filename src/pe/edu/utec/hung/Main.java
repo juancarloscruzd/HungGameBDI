@@ -26,17 +26,12 @@ public class Main {
 		IComponentManagementService managementService = SServiceProvider
 				.getService(platform, IComponentManagementService.class).get();
 
-		// Guesser component
-		// Create the guesser component
-		IComponentIdentifier guesser = managementService
-				.createComponent("guesser", "pe.edu.utec.hung.bdi.Player2BDI.class", null).getFirstResult();
+		IComponentIdentifier player2 = managementService
+				.createComponent("player2", "pe.edu.utec.hung.bdi.Player2BDI.class", null).getFirstResult();
 
-		// Hangman component
-		// Add the gueser reference into the Hangman component creation
 		CreationInfo additionalInfo = new CreationInfo(
-				SUtil.createHashMap(new String[] { "guesser" }, new Object[] { guesser }));
-		IComponentIdentifier hangman = managementService
-				.createComponent("hangman", "pe.edu.utec.hung.bdi.Player1BDI.class", additionalInfo).getFirstResult();
-		;
+				SUtil.createHashMap(new String[] { "player2" }, new Object[] { player2 }));
+		managementService.createComponent("player1", "pe.edu.utec.hung.bdi.Player1BDI.class", additionalInfo)
+				.getFirstResult();
 	}
 }
