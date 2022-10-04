@@ -90,10 +90,8 @@ public class Player2BDI {
 	}
 
 	@Plan(trigger = @Trigger(goals = GuessWord.class))
-	protected void thinkAndSelectAnotherLetter() {
-		String nextLetter = pickNextLetter();
-
-		usedLetters.add(nextLetter);
+	protected void selectNewLetter() {
+		usedLetters.add(pickLetter());
 	}
 
 	@Plan(trigger = @Trigger(factaddeds = "usedLetters"))
@@ -126,6 +124,7 @@ public class Player2BDI {
 				}
 
 				gameEnd = failedAttempts == maxAttempts;
+				logger.info(failedAttempts < maxAttempts ? "Player2 won the game" : "Player 1 won the game");
 				
 			} else {
 				String[] guessedLetters = (String[]) msg.get(SFipa.CONTENT);
@@ -141,7 +140,7 @@ public class Player2BDI {
 		}
 	}
 
-	private String pickNextLetter() {
+	private String pickLetter() {
 		String selectedLetter = "_";
 		do {
 			String next = "";

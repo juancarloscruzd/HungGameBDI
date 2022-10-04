@@ -14,6 +14,20 @@ import pe.edu.utec.hung.ui.FrameView;
 
 public class Main {
 
+	// Integrantes de grupo:
+	// - Anchiraico Orozco, Maro Antonio
+	// - Cruz Diaz, Juan Carlos
+
+	// Notas:
+	// - Se agrega la carpeta resources por el uso de imagenes y el archivo del
+	// corpus
+	// - El método de adivinación está basado en probabilidades de ocurrencia de las
+	// letras con respecto al corpus
+	// - Se usa una lista linkeada para seleccionar las letras con mayor
+	// probabilidad, además se intercala los métodes poll (85%) y pollLast (15%)
+	// para reducir el riesgo de perder intentos
+	// - Se usa un Frame para mostrar en imágenes el estado del juego
+
 	public static void main(String[] args) {
 
 		SwingUtilities.invokeLater(new Runnable() {

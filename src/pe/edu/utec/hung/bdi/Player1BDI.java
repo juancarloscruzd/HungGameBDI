@@ -93,18 +93,18 @@ public class Player1BDI {
 	}
 
 	private Boolean checkAttempt(String letter) {
-		Boolean guessed = false;
+		Boolean success = false;
 		for (int i = 0; i < secretWord.length(); i++) {
 			if (secretWord.charAt(i) == letter.charAt(0)) {
 				guessedLetters[i] = letter;
-				guessed = true;
+				success = true;
 			}
 		}
 
-		return guessed;
+		return success;
 	}
 
-	private void emitPartialResult() {
+	private void emitPartialResult() {	
 		Map<String, Object> msg = new HashMap<String, Object>();
 		msg.put(SFipa.CONTENT, guessedLetters);
 		msg.put(SFipa.RECEIVERS, player2);
